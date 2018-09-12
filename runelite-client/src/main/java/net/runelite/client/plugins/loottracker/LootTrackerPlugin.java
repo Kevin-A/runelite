@@ -27,6 +27,7 @@ package net.runelite.client.plugins.loottracker;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
+import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
 import com.google.inject.Provides;
 import java.awt.image.BufferedImage;
@@ -102,6 +103,9 @@ public class LootTrackerPlugin extends Plugin
 
 	@Inject
 	private Client client;
+
+	@Inject
+	private EventBus eventBus;
 
 	private LootTrackerPanel panel;
 	private NavigationButton navButton;
@@ -188,6 +192,7 @@ public class LootTrackerPlugin extends Plugin
 		final int combat = npc.getCombatLevel();
 		final LootTrackerItem[] entries = buildEntries(stack(items));
 		SwingUtilities.invokeLater(() -> panel.add(name, combat, entries));
+        eventBus.post(new LootReceived(name, combat, entries, EntityType.NPC));
 	}
 
 	@Subscribe
@@ -199,21 +204,25 @@ public class LootTrackerPlugin extends Plugin
 		final int combat = player.getCombatLevel();
 		final LootTrackerItem[] entries = buildEntries(stack(items));
 		SwingUtilities.invokeLater(() -> panel.add(name, combat, entries));
+		eventBus.post(new LootReceived(name, combat, entries, EntityType.PLAYER));
 	}
 
 	@Subscribe
 	public void onWidgetLoaded(WidgetLoaded event)
 	{
 		final ItemContainer container;
+		final EntityType entityType;
 		switch (event.getGroupId())
 		{
 			case (WidgetID.BARROWS_REWARD_GROUP_ID):
 				eventType = "Barrows";
 				container = client.getItemContainer(InventoryID.BARROWS_REWARD);
+				entityType = EntityType.BARROWS;
 				break;
 			case (WidgetID.CHAMBERS_OF_XERIC_REWARD_GROUP_ID):
 				eventType = "Chambers of Xeric";
 				container = client.getItemContainer(InventoryID.CHAMBERS_OF_XERIC_CHEST);
+				entityType = EntityType.XERIC;
 				break;
 			case (WidgetID.THEATRE_OF_BLOOD_GROUP_ID):
 				int region = WorldPoint.fromLocalInstance(client, client.getLocalPlayer().getLocalLocation()).getRegionID();
@@ -223,11 +232,13 @@ public class LootTrackerPlugin extends Plugin
 				}
 				eventType = "Theatre of Blood";
 				container = client.getItemContainer(InventoryID.THEATRE_OF_BLOOD_CHEST);
+				entityType = EntityType.TOB;
 				break;
 			case (WidgetID.CLUE_SCROLL_REWARD_GROUP_ID):
 				// event type should be set via ChatMessage for clue scrolls.
 				// Clue Scrolls use same InventoryID as Barrows
 				container = client.getItemContainer(InventoryID.BARROWS_REWARD);
+				entityType = EntityType.CLUE;
 				break;
 			default:
 				return;
@@ -248,6 +259,7 @@ public class LootTrackerPlugin extends Plugin
 		{
 			final LootTrackerItem[] entries = buildEntries(stack(items));
 			SwingUtilities.invokeLater(() -> panel.add(eventType, -1, entries));
+			eventBus.post(new LootReceived(eventType, -1, entries, entityType));
 		}
 		else
 		{
